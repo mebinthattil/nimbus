@@ -11,3 +11,4 @@ bin           = @["nimbus"]
 # Dependencies
 
 requires "nim >= 2.0.8"
+requires "dotenv >= 2.0.0"
