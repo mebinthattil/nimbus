@@ -11,5 +11,7 @@ nimble run
 ```.env
 PDSHOST=https://bsky.social
 BLUESKY_HANDLE=foo.bar
-BLUESKY_PASSWORD=letmein
+APP_PASSWORD=letmein
 ```
+
+> ref: https://bsky.app/settings/app-passwords

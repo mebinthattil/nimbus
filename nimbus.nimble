@@ -7,6 +7,8 @@ license       = "AGPL-3.0-or-later"
 srcDir        = "src"
 bin           = @["nimbus"]
 
+# Switches
+switch "define", "ssl"
 
 # Dependencies
 
