@@ -1,0 +1,2 @@
+- Edit and create posts using $EDITOR
+- 

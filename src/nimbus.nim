@@ -6,34 +6,64 @@ import dotenv
 
 load()
 
-# Get required environment variables
-proc getCredentials(): (string, string, string) =
-  let PDSHOST = getEnv("PDSHOST", "https://bsky.social")
-  let BLUESKY_HANDLE = getEnv("BLUESKY_HANDLE", "")
-  let APP_PASSWORD = getEnv("APP_PASSWORD", "")
-  if BLUESKY_HANDLE == "" or APP_PASSWORD == "":
-    quit("[ERROR]: BLUESKY_HANDLE or APP_PASSWORD is missing from .env file", 1)
-  return (PDSHOST, BLUESKY_HANDLE, APP_PASSWORD)
+# TODO: Baseless methods??
+type 
+  Nimbus = object
+    PdsHost: string
+    BlueskyHandle: string
+    AppPassword: string
+    AccessJwt: string
+    Editor: string
+
+method editor(n: Nimbus): bool = 
+  return n.Editor != ""
+
+method setState(n: var Nimbus, PdsHost, BlueskyHandle, AppPassword, 
+  Editor: string): bool =
+  if BlueskyHandle == "" or AppPassword == "":
+    echo "[ERROR]: BLUESKY_HANDLE or APP_PASSWORD is missing from .env file"
+    return false
+
+  n.PdsHost = PdsHost
+  n.BlueskyHandle = BlueskyHandle
+  n.AppPassword = AppPassword
+  n.Editor = Editor
+
+  return true
 
 # Fetch access token
-proc authenticate(client: var HttpClient, PDSHOST, BLUESKY_HANDLE,
-    APP_PASSWORD: string): string =
+method authenticate(n: var Nimbus, client: var HttpClient): bool =
   let authPayload = %*{
-    "identifier": BLUESKY_HANDLE,
-    "password": APP_PASSWORD
+    "identifier": n.BlueskyHandle,
+    "password": n.AppPassword
   }
 
   let authResponse = client.request(
-    PDSHOST & "/xrpc/com.atproto.server.createSession",
+    n.PdsHost & "/xrpc/com.atproto.server.createSession",
     httpMethod = HttpPost,
     body = authPayload.pretty
   )
 
   if authResponse.code != Http200:
-    quit("[ERROR]: Failed to authenticate. Response: " & authResponse.body, 1)
+    echo "[ERROR]: Failed to authenticate. Response: " & authResponse.body
+    return false
 
   let authJson = parseJson(authResponse.body)
-  return authJson["accessJwt"].getStr()
+
+  n.AccessJwt = authJson["accessJwt"].getStr()
+  return true
+
+method clearState(n: Nimbus): bool = 
+  return true
+
+# Get required environment variables
+proc getCredentials(): (string, string, string, string) =
+  let PDSHOST = getEnv("PDSHOST", "https://bsky.social")
+  let BLUESKY_HANDLE = getEnv("BLUESKY_HANDLE", "")
+  let APP_PASSWORD = getEnv("APP_PASSWORD", "")
+  let EDITOR = getEnv("EDITOR", "");
+
+  return (PDSHOST, BLUESKY_HANDLE, APP_PASSWORD, EDITOR)
 
 # Prompt user for a message
 proc promptForMessage(): string =
@@ -41,12 +71,11 @@ proc promptForMessage(): string =
   return readLine(stdin).strip()
 
 # Create a post on Bluesky and display the post link
-proc createPost(client: var HttpClient, PDSHOST, BLUESKY_HANDLE, accessJwt,
-    message: string) =
-  client.headers["Authorization"] = "Bearer " & accessJwt
+method createPost(n: Nimbus, client: var HttpClient, message: string) =
+  client.headers["Authorization"] = "Bearer " & n.AccessJwt
 
   let postPayload = %*{
-    "repo": BLUESKY_HANDLE,
+    "repo": n.BlueskyHandle,
     "collection": "app.bsky.feed.post",
     "record": %*{
       "text": message,
@@ -55,7 +84,7 @@ proc createPost(client: var HttpClient, PDSHOST, BLUESKY_HANDLE, accessJwt,
   }
 
   let postResponse = client.request(
-    PDSHOST & "/xrpc/com.atproto.repo.createRecord",
+    n.PdsHost & "/xrpc/com.atproto.repo.createRecord",
     httpMethod = HttpPost,
     body = postPayload.pretty
   )
@@ -67,24 +96,33 @@ proc createPost(client: var HttpClient, PDSHOST, BLUESKY_HANDLE, accessJwt,
   let uri = postJson["uri"].getStr()
   let postId = uri.split("/")[^1]
 
-  echo "[INFO]: Post successful: https://bsky.app/profile/" & BLUESKY_HANDLE &
+  echo "[INFO]: Post successful: https://bsky.app/profile/" & n.BlueskyHandle &
       "/post/" & postId
 
 # Main function
 proc main() =
-  let (PDSHOST, BLUESKY_HANDLE, APP_PASSWORD) = getCredentials()
+  let (PDSHOST, BLUESKY_HANDLE, APP_PASSWORD, EDITOR) = getCredentials()
+
+  if EDITOR == "":
+    echo "[INFO]: No Editor set, defaulting to STDIN"
+
   var client = newHttpClient()
   client.headers = newHttpHeaders({"Content-Type": "application/json"})
 
+  var nimbus: Nimbus 
+  if not nimbus.setState(PDSHOST, BLUESKY_HANDLE, APP_PASSWORD, EDITOR):
+    quit("[ERROR]: Failed to intialize Nimbus state!", 1)
+
   try:
-    let accessJwt = authenticate(client, PDSHOST, BLUESKY_HANDLE, APP_PASSWORD)
-    echo "[AUTH]: Access token received."
+    if not nimbus.authenticate(client):
+      #quit("[ERROR]: Failed to authenticate. Response: " & authResponse.body, 1)
+      quit("[ERROR]: Failed to authenticate. Response: ", 1)
 
     let message = promptForMessage()
     if message == "":
       quit("[ERROR]: Message cannot be empty.", 1)
 
-    createPost(client, PDSHOST, BLUESKY_HANDLE, accessJwt, message)
+    nimbus.createPost(client, message)
   finally:
     client.close()
 
