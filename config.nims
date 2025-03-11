@@ -1,0 +1,3 @@
+--define:ssl
+--define:useStdLib
+--threads:off
