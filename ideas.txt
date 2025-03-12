@@ -1,2 +1,10 @@
 - Edit and create posts using $EDITOR
-- 
+- VIM motions for the timeline
+- Pipe posts | from STDIN/STDOUT
+- Support more than just bsky pastebin?: https://plonk.li
+- Shareable JSON based config
+- Pickup where you left-off: an in-timeline marker that lets you scroll from
+  where you left off
+- Caching, fuzzing finding cached posts
+- Render images inside Kitty
+
